@@ -1,27 +1,35 @@
 #include <iostream>
 #include <fstream>
-#include "Matrix.h"
-#include "LUDecomposition.h"
+#include <mpi.h>
+#include "src/Matrix.h"
+#include "src/LUDecomposition.h"
 
 using namespace std;
 
-int main()
+int main(int argc, char **argv)
 {
-    cout << "Hello world!" << endl;
-    unsigned n = 8;
-    std::ifstream file("Matrix3D.txt");
-    Matrix m = Matrix(file, n);
-    cout<<m<<endl;
-//    LUDecomposition lu(m);
-//    cout<<lu.getL()<<endl;
-//    cout<<lu.getU()<<endl;
-//    cout<<lu.getLU()<<endl;
-//    cout<<lu.getL()*lu.getU()<<endl;
-    cout<<Matrix::eye(n)<<endl;
-    cout<<Matrix::ones(n)<<endl;
-    cout<<Matrix::eye(n)+Matrix::ones(n)<<endl;
-    cout<<Matrix::eye(n)-Matrix::ones(n)<<endl;
-    cout<<Matrix::eye(n)+3.14<<endl;
-    cout<<Matrix::eye(n)-3.14<<endl;
+    MPI_Init(&argc, &argv);
+    int myid, numProcs;
+    MPI_Comm_rank(MPI_COMM_WORLD, &myid);
+    MPI_Comm_size(MPI_COMM_WORLD, &numProcs);
+		unsigned n = 8;
+		if(myid==0)
+		{
+			std::ifstream file("Matrix3D.txt");
+			Matrix m = Matrix(file, n);
+			cout<<"A:\n"<<m<<endl;
+			LUDecomposition lu(m[0], n, myid, numProcs);
+			cout<<"L:\n"<<lu.getL()<<endl;
+			cout<<"U:\n"<<lu.getU()<<endl;
+			cout<<"[LU]:\n"<<lu.getLU()<<endl;
+			Matrix mlu = lu.getL()*lu.getU();
+			cout<<"LU:\n"<<mlu<<endl;
+			cout<<"MSE: "<<mse(m, mlu)<<endl;
+		}
+		else
+		{
+			LUDecomposition lu(nullptr, n, myid, numProcs);
+		}
+		MPI_Finalize();
     return 0;
 }
