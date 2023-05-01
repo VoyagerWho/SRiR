@@ -27,113 +27,81 @@ LUDecomposition::LUDecomposition(const Matrix &A)
   }
 }
 
-LUDecomposition::LUDecomposition(const double* orgA, const unsigned matSize, const int myid, const int numOfProcs)
+LUDecomposition::LUDecomposition(const double *orgA, const unsigned matSize, const int myid, const int numOfProcs)
     : u(Matrix(matSize)), l(Matrix(matSize))
 {
   const unsigned rows = matSize / numOfProcs;
-
-  double *A = new double[matSize*matSize]();
-  double *Ut = nullptr;
-  double *locL = new double[rows * matSize]();
-  double *locU = new double[rows * matSize]();
+  double *A = new double[matSize * matSize]();
+  double *row = new double[numOfProcs * rows]();
+  double *myRow = new double[rows]();
   if (myid == 0)
   {
-    Ut = new double[matSize * matSize]();
-    double* ptr = A;
-    for(const double* i=orgA;unsigned(i-orgA)<matSize*matSize;++i)
+    double *ptr = A;
+    for (const double *i = orgA; unsigned(i - orgA) < matSize * matSize; ++i)
     {
       *ptr++ = *i;
     }
   }
-  MPI_Bcast(A, matSize*matSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-  u = Matrix(A, matSize);
-
-  for (unsigned k = 0; k < matSize; ++k)
+  MPI_Bcast(A, matSize * matSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  for (unsigned i = 0; i < matSize; ++i)
   {
-    for (unsigned i = myid*rows; i < (myid+1)*rows; ++i)
+    if (myid == 0 && !(i % 100))
+      std::cout << i << "\n";
+    for (unsigned j = myid * rows; j < (myid + 1) * rows; ++j)
     {
-      if (i < k)
+      if (j < i)
       {
-        l[i][k] = 0.0;
-      }
-      else if (i == k)
-      {
-        l[i][k] = 1.0;
+        l[j][i] = 0;
       }
       else
       {
-        l[i][k] = u[i][k] / u[k][k] ;
+        l[j][i] = A[j * matSize + i];
+        for (unsigned k = 0; k < i; ++k)
+        {
+          l[j][i] = l[j][i] - l[j][k] * u[k][i];
+        }
       }
-
+      myRow[j - myid * rows] = l[j][i];
     }
-
-    getRows(l[0], locL, matSize, myid, rows);
-    MPI_Gather(locL, matSize*rows, MPI_DOUBLE, l[0], matSize*rows, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    MPI_Bcast(l[0], matSize*matSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
-
-    for (unsigned i = myid*rows; i < (myid+1)*rows; ++i)
+    MPI_Gather(myRow, rows, MPI_DOUBLE, row, rows, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(row, matSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    for (unsigned j = 0; j < matSize; ++j)
+      l[j][i] = row[j];
+    for (unsigned j = myid * rows; j < (myid + 1) * rows; ++j)
     {
-      if (i < k)
+      if (j < i)
       {
-        u[k][i] = 0.0;
+        u[i][j] = 0;
+      }
+      else if (j == i)
+      {
+        u[i][j] = 1;
       }
       else
       {
-        for (unsigned j = k+1; j < matSize; ++j)
-          u[j][i] = u[j][i] - l[j][k] * u[k][i];
+        u[i][j] = A[i * matSize + j] / l[i][i];
+        for (unsigned k = 0; k < i; ++k)
+        {
+          double multi = l[i][k] * u[k][j];
+          u[i][j] = u[i][j] - (multi / l[i][i]);
+        }
       }
-
+      myRow[j - myid * rows] = u[i][j];
     }
-    getColumns(u[0], locU, matSize, myid, rows);
-    MPI_Gather(locU, matSize*rows, MPI_DOUBLE, Ut, matSize*rows, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    if (myid == 0)
-      transpose(Ut, u[0], matSize);
-    MPI_Bcast(u[0], matSize*matSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Gather(myRow, rows, MPI_DOUBLE, row, rows, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(row, matSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    for (unsigned j = 0; j < matSize; ++j)
+      u[i][j] = row[j];
   }
+
   delete[] A;
-  if (myid == 0)
-      delete[] Ut;
-  delete[] locL;
-  delete[] locU;
+  delete[] row;
+  delete[] myRow;
 }
 
 LUDecomposition::~LUDecomposition()
 {
   // dtor
-}
-
-void LUDecomposition::transpose(const double *matrix, double *transposed, unsigned matSize) const
-{
-  for (unsigned i = 0; i < matSize; ++i)
-  {
-    for (unsigned j = 0; j < matSize; ++j)
-    {
-      transposed[i * matSize + j] = matrix[i * matSize + j];
-    }
-  }
-}
-
-void LUDecomposition::getColumns(const double *matrix, double *col, unsigned matSize, int processNum, unsigned columns) const
-{
-  for(unsigned i=0;i<columns;++i)
-  {
-    for(unsigned j=0;j<matSize;++j)
-    {
-      col[i*matSize+j]=matrix[j*matSize + processNum*columns + i];
-    }
-  }
-}
-
-void LUDecomposition::getRows(const double *matrix, double *row, unsigned matSize, int processNum, unsigned rows) const
-{
-  for(unsigned i=0;i<rows;++i)
-  {
-    for(unsigned j=0;j<matSize;++j)
-    {
-      row[i*matSize+j]=matrix[(processNum*rows+i)*matSize + j];
-    }
-  }
 }
 
 Matrix LUDecomposition::getL() const
