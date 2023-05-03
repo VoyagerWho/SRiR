@@ -9,19 +9,19 @@ SRCS := $(wildcard $(SRC_DIR)/*.cpp) main.cpp
 OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(filter-out main.cpp,$(SRCS))) $(OBJ_DIR)/main.o
 DEPS := $(OBJS:%.o=%.d)
 
-$(BIN_DIR)/main: $(OBJS) | $(BIN_DIR)
-  $(CXX) $(CXXFLAGS) $^ -o $@
+$(BIN_DIR)/main: $(OBJS) | $(BIN_DIR)	
+	$(CXX) $(CXXFLAGS) $^ -o $@
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
-  $(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 $(OBJ_DIR)/main.o: main.cpp | $(OBJ_DIR)
-  $(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 -include $(DEPS)
 
 $(BIN_DIR) $(OBJ_DIR):
-  mkdir -p $@
+	mkdir -p $@
 
 .PHONY: clean
 clean:
@@ -29,7 +29,7 @@ clean:
 	
 .PHONY: run
 run:
-	mpiexec -f nodes -n 4 ./bin/main
+	mpiexec -f nodes -n 1 ./bin/main
 	
 .PHONY: nodes
 nodes:
