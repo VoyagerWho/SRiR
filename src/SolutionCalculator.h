@@ -2,13 +2,16 @@
 #define SOLUTIONCALCULATOR_H
 
 #include "LUDecomposition.h"
+#include <fstream>
 
 class SolutionCalculator{
 public:
     SolutionCalculator(const LUDecomposition& _lu, std::ifstream* _bVecFile, const int _myid, const int _numProcs, const unsigned _n);
     ~SolutionCalculator();
     void run();
-    double* getSolutionVector() const;
+    void printSolutionVector() const;
+
+    double mse(std::ifstream* targetVec);
 
 private:
     void calculateYVector();
@@ -18,6 +21,7 @@ private:
     Matrix L;
     Matrix U;
     double* y;
+    double* yAll;
     double* x;
     double* b;
 

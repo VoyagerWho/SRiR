@@ -19,6 +19,7 @@ SolutionCalculator::SolutionCalculator(const LUDecomposition& _lu, std::ifstream
             *_bVecFile >> *ptr++;
         }
     }
+
     MPI_Bcast(b, n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     MPI_Barrier(MPI_COMM_WORLD);
 }
@@ -30,15 +31,36 @@ SolutionCalculator::~SolutionCalculator()
     delete[] b;
 }
 
-double* SolutionCalculator::getSolutionVector() const
+void SolutionCalculator::printSolutionVector() const
 {
-    return x;
+    for(int i = 0; i < (int)n; i++)
+    {
+        printf("% 8.3f\n ", x[i]);
+    }
 }
 
 void SolutionCalculator::run()
 {
     calculateYVector();
-    // calculateXVector();
+    calculateXVector();
+    MPI_Barrier(MPI_COMM_WORLD);
+}
+
+double SolutionCalculator::mse(std::ifstream* targetVec)
+{
+    double* target = new double[n]();
+    double *ptr = target;
+    for (unsigned i = 0; i < n; ++i)
+    {
+        *targetVec >> *ptr++;
+    }
+
+	double error = 0;
+	for (int i = 0; i < (int)n; i++) {
+		error += pow((target[i] - x[i]), 2);
+	}
+    delete[] target;
+	return error / n;
 }
 
 //-----------------------------------
@@ -47,53 +69,73 @@ void SolutionCalculator::run()
 
 void SolutionCalculator::calculateYVector()
 {
+    double* yPartial = new double[n]();
     bool ownCurrentRow;
     double partialRowSum;
     double globalSum;
     for(int row = 0; row < (int)n; row++)
     {
-        std::cout << "[" << myid << "] begin row " << row << std::endl;
+        if (myid == 0 && !(row % 100))
+            std::cout << "y: " << row << "\n";
         partialRowSum = 0;
         globalSum = 0;
         ownCurrentRow = false;
 
         for(unsigned collumnOwned = 0; collumnOwned < maxNumberOfCollumnsOwned; collumnOwned++)
         {
-            // std::cout << "[" << myid << "] searching for collumn " << collumnOwned << std::endl;
             if((mycols[collumnOwned] < row) && mycols[collumnOwned] != -1)
             {
-                // std::cout << "[" << myid << "] own collumn " << mycols[collumnOwned] << std::endl;
-                partialRowSum += L[row][mycols[collumnOwned]] * y[mycols[collumnOwned]];
+                partialRowSum += L[row][mycols[collumnOwned]] * yPartial[mycols[collumnOwned]];
             }
             if(mycols[collumnOwned] == row)
                 ownCurrentRow = true;
         }
         
-        std::cout << "[" << myid << "] executing reduce now " << std::endl;
         MPI_Allreduce( &partialRowSum, &globalSum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD );
-        std::cout << "[" << myid << "] reduce complete, globalSum: " << globalSum << std::endl;
-        if(ownCurrentRow && L[row][row] != 0.0)
+        if(ownCurrentRow && abs(L[row][row]) > 0.000001)
         {
-            std::cout << "[" << myid << "] calculating y of row " << row << std::endl;
-            y[row] = (b[row] - globalSum) / L[row][row];
+            yPartial[row] = (b[row] - globalSum) / L[row][row];
         }
     }
 
+    MPI_Allreduce(yPartial, y, n, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    delete[] yPartial;
 }
 
 void SolutionCalculator::calculateXVector()
 {
+    double* xPartial = new double[n]();
+    bool ownCurrentRow;
+    double partialRowSum;
+    double globalSum;
 
-    std::cout << "[" << myid << "] beggin x calc" << std::endl;
-    for(int col = n-1; col >= 0; col--)
-    {   
-        if(U[col][col] != 0.0)
-            x[col] = y[col] / U[col][col];
-        for(int row = col-1; row >= 0; row--)
+    for(int row = n-1; row >= 0; row--)
+    {
+        if (myid == 0 && !(row % 100))
+            std::cout << "x: " << row << "\n";
+        partialRowSum = 0;
+        globalSum = 0;
+        ownCurrentRow = false;
+
+        for(unsigned collumnOwned = 0; collumnOwned < maxNumberOfCollumnsOwned; collumnOwned++)
         {
-            y[row] -= U[row][col]*x[col];
+            if((mycols[collumnOwned] > row) && mycols[collumnOwned] != -1)
+            {
+                partialRowSum += U[row][mycols[collumnOwned]] * xPartial[mycols[collumnOwned]];
+            }
+            if(mycols[collumnOwned] == row)
+                ownCurrentRow = true;
+        }
+        
+        MPI_Allreduce( &partialRowSum, &globalSum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD );
+        if(ownCurrentRow && abs(L[row][row]) > 0.000001)
+        {
+            xPartial[row] = (y[row] - globalSum) / U[row][row];
         }
     }
+
+    MPI_Allreduce(xPartial, x, n, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    delete[] xPartial;
 }
 
 //Cyclic assignement of columns
@@ -111,7 +153,6 @@ void SolutionCalculator::assignColumnsToProcess()
     {
         if(col == (unsigned)(numberOfCollumnsAssigned*numProcs + myid))
         {
-            std::cout << "[" << myid << "] I own col " << col << std::endl;
             mycols[numberOfCollumnsAssigned] = col;
             numberOfCollumnsAssigned++;
         }
