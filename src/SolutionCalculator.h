@@ -65,7 +65,6 @@ private:
     Matrix L;                          //!< Lokalna macierz L
     Matrix U;                          //!< Lokalna macierz U
     double *y;                         //!< Lokalna przestrzeń na wektor y
-    double *yAll;                      //!< Lokalna przestrzeń na z agregowany wektor y
     double *x;                         //!< Lokalna przestrzeń na wektor x
     double *b;                         //!< Lokalna przestrzeń na wektor b
     const int myid;                    //!< Identyfikator węzła wewnątrz komunikatora MPI_COMM_WORLD

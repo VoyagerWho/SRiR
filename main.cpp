@@ -32,12 +32,14 @@ struct Arguments
 void handleArguments(int argc, char **argv, Arguments &args, int myid)
 {
 	int opt;
+	// lista argumentów podawanych przy wywołaniu programu
 	struct option longopts[] =
 		{
 			{"matrixSize", required_argument, &args.matrixSize, 's'},
 			{"fileNameScheme", required_argument, NULL, 'm'},
 			{"compareX", no_argument, &args.compareX, 1},
 			{0}};
+	// pętla przypisująca argumenty do właściwych pól struktury Arguments
 	while (true)
 	{
 		opt = getopt_long(argc, argv, "xs:m:", longopts, 0);
@@ -74,6 +76,7 @@ void handleArguments(int argc, char **argv, Arguments &args, int myid)
 			break;
 		}
 	}
+	// w przypadku nie podania wymaganego argumentu, zamknięcie programu
 	if (myid == 0)
 	{
 		if (args.matrixSize == -1)
@@ -103,8 +106,6 @@ int main(int argc, char **argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &numProcs);
 
 	handleArguments(argc, argv, args, myid);
-
-	// MPI_Barrier(MPI_COMM_WORLD);
 
 	if (myid == 0)
 	{
