@@ -39,3 +39,4 @@ obj
 *.layout
 
 .vscode
+.vs
