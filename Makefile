@@ -29,7 +29,7 @@ clean:
 	
 .PHONY: run
 run:
-	mpiexec -f nodes -n 4 ./bin/main -s 4 -m Test.txt --compareX
+	mpiexec -f nodes -n 8 ./bin/main -s 1600 -m .txt --compareX
 	
 .PHONY: nodes
 nodes:
