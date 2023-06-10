@@ -3,6 +3,8 @@
 LUDecomposition::LUDecomposition(const double *orgA, const unsigned matSize, const int myid, const int numOfProcs)
     : u_done(Matrix(matSize)), l_done(Matrix(matSize))
 {
+
+  // stworzenie macierzy wejściowej i przypisanie jej wartości
   upcxx::dist_object<upcxx::global_ptr<double>> A_g(upcxx::new_array<double>(matSize*matSize));
   double *A = A_g->local();
   if (upcxx::rank_me() == 0) {
@@ -15,23 +17,30 @@ LUDecomposition::LUDecomposition(const double *orgA, const unsigned matSize, con
     }
   }
   upcxx::barrier();	
+
+  //rozesłanie macierzy wejściowej do wszystkich węzłów
   upcxx::future<> fut_A = upcxx::broadcast(A, matSize * matSize, 0);
   fut_A.wait();
   upcxx::barrier();	
 
+  //stworzenie rozłożonych po węzłach obiektów przechowujących lokalne macierze l i u
   upcxx::dist_object<upcxx::global_ptr<double>> l_g(upcxx::new_array<double>(matSize*matSize));
   upcxx::dist_object<upcxx::global_ptr<double>> u_g(upcxx::new_array<double>(matSize*matSize));
   double *l = l_g->local();
   double *u = u_g->local();
+  //wskaźniki na obiektu l i u węzła 0 do zapisywania wyliczeń
   upcxx::global_ptr<double> l0 = l_g.fetch(0).wait();
   upcxx::global_ptr<double> u0 = u_g.fetch(0).wait();
 
   // wyznaczenie maksymalnej liczby wierszy/kolumn przydzielonych do jednego węzła
-  const unsigned rows = matSize / numOfProcs ;
+  const unsigned rows = matSize / numOfProcs + 1;
+
+  //zmienne pomocnicze
   double lii = 0;
   unsigned j = 0;
   std::vector<double> buffer;
   buffer.reserve(matSize);
+
   // iteracja po zależnym wymiarze macierzy
   // wiersze dla macierzy L
   // kolumny dla macierzy U
@@ -56,33 +65,30 @@ LUDecomposition::LUDecomposition(const double *orgA, const unsigned matSize, con
         for (unsigned k = 0; k < i; ++k)
         {
           l[j * matSize + i] = l[j * matSize + i] - l[j * matSize + k] * u[k * matSize + i];
-          // std::cout << "[ " << myid << "] j: " << j << " k: " << k << " u: " << l[j*matSize + k] << std::endl;
         }
       }
+      //wysłanie wyniku węzłowi 0
       upcxx::rput(l[j * matSize + i], l0 + j*matSize + i).wait();
     }
 
-    //launch a bulk broadcast of element data from rank 0
+    //zebranie przed chwilą wyliczonej kolumny macierzy l przez węzeł 0 o rozesłanie jej wszystkim węzłom
     upcxx::barrier();	
     if (upcxx::rank_me() == 0) {
       for (size_t j = i; j < matSize; j++)
       {
-        // std::cout << "[" << myid << "] " << l[j * matSize + i] << std::endl;
         buffer[j] = l[j * matSize + i];
       }
     }
-    // launch a bulk broadcast of element data from rank 0
     upcxx::future<> fut_l = upcxx::broadcast( buffer.data(), matSize, 0); 
     fut_l.wait();
-
     if(upcxx::rank_me() != 0)
     {
       for (size_t j = i; j < matSize; j++){
         l[j * matSize + i] = buffer[j];
       }
     }
+    upcxx::barrier();
 
-    upcxx::barrier();	
     // iteracja po niezależnych wierszach macierzy U
     for (j = myid * rows; (j < (myid + 1) * rows) && (j < matSize); ++j)
     {
@@ -102,31 +108,27 @@ LUDecomposition::LUDecomposition(const double *orgA, const unsigned matSize, con
         lii = l[i*matSize + i];
         if(std::abs(lii) > 1e-32){
           u[i * matSize + j] = A[i * matSize + j] / lii;
-          // std::cout << "[ " << myid << "] i: " << i << " j: " << j << " l: " << l[i*matSize + i] << std::endl;
           for (unsigned k = 0; k < i; ++k)
           {
             double multi = l[i * matSize + k] * u[k * matSize + j];
             u[i * matSize + j] = u[i * matSize + j] - (multi / lii);
-            // std::cout << "[ " << myid << "] k: " << k << " j: " << j << " l: " << u[k*matSize + j] << std::endl;
           }
         }
       }
-      // std::cout << "[" << myid << "] " << u[i * matSize + j] << std::endl;
+      //wysłanie wyniku węzłowi 0
       upcxx::rput( u[i * matSize + j], u0 + i*matSize + j).wait();
     }
     
+    //zebranie przed chwilą wyliczonego wiersza macierzy u przez węzeł 0 o rozesłanie jej wszystkim węzłom
     upcxx::barrier();	
     if (upcxx::rank_me() == 0) {
       for (size_t j = i; j < matSize; j++)
       {
-        // std::cout << "[" << myid << "] " << u[i * matSize + j] << std::endl;
         buffer[j] = u[i * matSize + j];
       }
     }
-    // launch a bulk broadcast of element data from rank 0
     upcxx::future<> fut_u = upcxx::broadcast( buffer.data(), matSize, 0); 
     fut_u.wait();
-
     if(upcxx::rank_me() != 0)
     {
       for (size_t j = i; j < matSize; j++){
@@ -136,18 +138,21 @@ LUDecomposition::LUDecomposition(const double *orgA, const unsigned matSize, con
     upcxx::barrier();	
   }
 
-  // dealokacja pamięci
+  //przepisanie przez węzel 0 wyliczonych macierzy do lokalnej pamięci
   if (upcxx::rank_me() == 0) {
     for(unsigned i = 0; i < matSize; i++)
     {
       for(unsigned j = 0; j < matSize; j++)
       {
-        // std::cout << l[(i*matSize + j)] << " ";
         l_done[i][j] = l[(i * matSize) + j];
         u_done[i][j] = u[(i * matSize) + j];
       }
     }
   }
+  // dealokacja pamięci
+  upcxx::delete_(*A_g);
+  upcxx::delete_(*l_g);
+  upcxx::delete_(*u_g);
   upcxx::barrier();
 }
 

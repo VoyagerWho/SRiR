@@ -29,7 +29,7 @@ clean:
 	
 .PHONY: run
 run:
-	upcxx-run -shared-heap 512M -n 8 -N 8 -ssh-servers stud204-01,stud204-02,stud204-05,stud204-07,stud204-09,stud204-11,stud204-12,stud204-14  ./bin/main -m 8 -f 3D.txt --compareX
+	upcxx-run -shared-heap 512M -n 8 -N 8 $$(upcxx-nodes nodes) ./bin/main -m 1600 -f .txt --compareX
 	
 .PHONY: nodes
 nodes:
