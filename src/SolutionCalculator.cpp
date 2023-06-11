@@ -109,8 +109,7 @@ void SolutionCalculator::calculateYVector()
         }
 
         // zebranie od procesów częściowych sum wiersza i rozesłanie sumy całkowitej do każdego z procesów
-        upcxx::reduce_all(partialRowSum, upcxx::experimental::op_add).wait();
-        globalSum = partialRowSum;
+        globalSum = upcxx::reduce_all(partialRowSum, upcxx::experimental::op_add).wait();
 
         // MPI_Allreduce( &partialRowSum, &globalSum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD );
         //  proces który posiada kolumne z aktualnie wyliczanym elementem y, wylicza go
@@ -159,8 +158,7 @@ void SolutionCalculator::calculateXVector()
         }
 
         // zebranie od procesów częściowych sum wiersza i rozesłanie sumy całkowitej do każdego z procesów
-        upcxx::reduce_all(partialRowSum, upcxx::experimental::op_add).wait();
-        globalSum = partialRowSum;
+        globalSum = upcxx::reduce_all(partialRowSum, upcxx::experimental::op_add).wait();
         // MPI_Allreduce(&partialRowSum, &globalSum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         //  proces który posiada kolumne z aktualnie wyliczanym elementem x, wylicza go
         if (ownCurrentRow && abs(L[row][row]) > 0.000001)

@@ -29,7 +29,7 @@ clean:
 	
 .PHONY: run
 run:
-	upcxx-run -shared-heap 512M -n 8 -N 8 $$(upcxx-nodes nodes) ./bin/main -m 1600 -f .txt --compareX
+	upcxx-run -shared-heap 512M -n 16 -N 64 $$(upcxx-nodes nodes) ./bin/main -m 1600 -f .txt --compareX
 	
 .PHONY: nodes
 nodes:
@@ -37,5 +37,5 @@ nodes:
 
 .PHONY: source
 source:
-	source /opt/nfs/config/source_upcxx.sh
+	source /opt/nfs/config/source_upcxx_2023.3.sh
 
