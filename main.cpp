@@ -5,6 +5,7 @@
 #include <string.h>
 #include "src/Matrix.h"
 #include "src/LUDecomposition.h"
+#include "src/SolutionCalculator.h"
 #include <chrono>
 
 using namespace std;
@@ -124,12 +125,31 @@ int main(int argc, char **argv)
 		Matrix mlu = lu.getL() * lu.getU();
 		cout << "LU MSE: " << mse(m, mlu) << endl;
 		cout << "LU deltaTime: " << std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count() << " ms" << endl;
+
+		// wczytanie wektora b
+		std::ifstream bVec(args.bFileName);
+		startTime = std::chrono::high_resolution_clock::now();
+		// rozwiązanie układu równań Ax = b
+		SolutionCalculator solutionCalculator(lu, &bVec, myid, numProcs, args.matrixSize);
+		solutionCalculator.run();
+		endTime = std::chrono::high_resolution_clock::now();
+		// solutionCalculator.printSolutionVector();
+		cout << "Solution deltaTime: " << std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count() << " ms" << endl;
+
+		if (args.compareX)
+		{
+			// porównanie wyniku z wartością oczekiwaną
+			std::ifstream targetVecFile(args.xFileName);
+			cout << "Soulution MSE: " << solutionCalculator.mse(&targetVecFile) << endl;
+		}
 	}
 	else
 	{
 		// czynności wezłów worker
 		// rozłożenie macierzy
 		LUDecomposition lu(nullptr, args.matrixSize, myid, numProcs);
+		SolutionCalculator solutionCalculator(lu, nullptr, myid, numProcs, args.matrixSize);
+		solutionCalculator.run();
 	}
 	upcxx::finalize();
 	return 0;
