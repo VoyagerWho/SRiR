@@ -48,8 +48,8 @@ public:
 
 protected:
 private:
-  Matrix u_done; //!< Lokalna macierz U
-  Matrix l_done; //!< Lokalna macierz L
+  Matrix u; //!< Lokalna macierz U
+  Matrix l; //!< Lokalna macierz L
 };
 
 #endif // LUDECOMPOSITION_H
