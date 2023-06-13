@@ -40,6 +40,8 @@ LUDecomposition::LUDecomposition(const double *orgA, const unsigned matSize, con
   unsigned j = 0;
   std::vector<double> buffer;
   buffer.reserve(matSize);
+  std::vector<upcxx::future<>> fut_l0;
+  std::vector<upcxx::future<>> fut_u0;
 
   // iteracja po zależnym wymiarze macierzy
   // wiersze dla macierzy L
@@ -67,9 +69,13 @@ LUDecomposition::LUDecomposition(const double *orgA, const unsigned matSize, con
           l[j][i] = l[j][i] - l[j][k] * u[k][i];
         }
       }
-      //wysłanie wyniku węzłowi 0
-      upcxx::rput(l[j][i], l0 + j*matSize + i).wait();
+      //asynchroniczne wysłanie wyniku węzłowi 0
+      fut_l0.push_back(upcxx::rput(l[j][i], l0 + j*matSize + i));
     }
+    //upewnienie się, że wszystkie wyniki dotarły i zostały zapisane
+    for(auto future: fut_l0)
+      future.wait();
+    fut_l0.clear();
 
     //zebranie przed chwilą wyliczonej kolumny macierzy l przez węzeł 0 o rozesłanie jej wszystkim węzłom
     upcxx::barrier();	
@@ -113,10 +119,14 @@ LUDecomposition::LUDecomposition(const double *orgA, const unsigned matSize, con
           }
         }
       }
-      //wysłanie wyniku węzłowi 0
-      upcxx::rput(u[i][j], u0 + i*matSize + j).wait();
+      //asynchroniczne wysłanie wyniku węzłowi 0
+      fut_u0.push_back(upcxx::rput(u[i][j], u0 + i*matSize + j));
     }
-    
+    //upewnienie się, że wszystkie wyniki dotarły i zostały zapisane
+    for(auto future: fut_u0)
+      future.wait();
+    fut_u0.clear();
+
     //zebranie przed chwilą wyliczonego wiersza macierzy u przez węzeł 0 o rozesłanie jej wszystkim węzłom
     upcxx::barrier();	
     if (upcxx::rank_me() == 0) {
